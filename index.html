@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f2eb">
+  <link rel="manifest" href="manifest.webmanifest">
+  <title>Panel diario</title>
+  <style>
+    :root{
+      --bg:#f5f2eb;--card:#fffdf8;--ink:#26231f;--muted:#7a746a;--line:#ded8cc;
+      --accent:#2f6b57;--accent2:#e5efe9;--danger:#a64b4b;--warn:#8b6f34;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+    .wrap{max-width:760px;margin:auto;padding:18px 14px 40px}
+    header{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:4px 2px 14px}
+    h1{margin:0;font-size:34px;letter-spacing:-.03em}.date,.muted{color:var(--muted);font-size:14px}
+    .tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+    .tab{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:12px 8px;font-weight:750;color:var(--ink);cursor:pointer}
+    .tab.active{background:var(--accent);color:white;border-color:var(--accent)}
+    .panel{display:none}.panel.active{display:block}
+    .card{background:var(--card);border:1px solid rgba(100,90,70,.10);border-radius:22px;padding:17px;margin-bottom:14px}
+    .primary{width:100%;border:0;border-radius:18px;padding:18px;font-size:19px;font-weight:800;background:var(--accent);color:#fff;cursor:pointer}
+    .primary.listening{background:#8b3f3f}
+    .status{min-height:22px;margin:10px 4px 0;color:var(--accent);font-weight:650;font-size:14px}
+    .hint{margin:8px 4px 0;color:var(--muted);font-size:13px;line-height:1.45}
+    .warn{display:none;margin-top:12px;padding:12px;border-radius:14px;background:#fff1ef;color:#8b3f3f;font-size:13px;line-height:1.4}
+    .manual{display:flex;gap:8px}.manual input{flex:1;min-width:0;border:1px solid var(--line);border-radius:15px;padding:14px;font-size:16px}
+    .manual button{border:0;background:var(--accent2);color:var(--accent);border-radius:15px;padding:0 18px;font-size:22px;font-weight:800}
+    .section-head{display:flex;justify-content:space-between;align-items:center;margin:6px 2px 10px}.section-head h2{margin:0;font-size:18px}
+    #tasks{display:flex;flex-direction:column;gap:9px}.task{display:flex;align-items:flex-start;gap:12px;background:var(--card);padding:14px;border-radius:17px;border:1px solid rgba(100,90,70,.10)}
+    .task input{width:22px;height:22px;accent-color:var(--accent)}.txt{flex:1;font-size:17px;line-height:1.35}.done .txt{text-decoration:line-through;color:var(--muted)}
+    .del{border:0;background:transparent;color:#aaa298;font-size:21px}.empty{text-align:center;color:var(--muted);padding:26px;border:1px dashed var(--line);border-radius:18px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}.small{flex:1;min-width:130px;border:1px solid var(--line);background:var(--card);border-radius:14px;padding:12px;font-weight:750;color:var(--ink)}
+    .danger{color:var(--danger)}
+    .voice-preview{margin-top:10px;padding:11px 12px;background:#f8f6f1;border-radius:14px;color:var(--muted);font-size:14px;min-height:42px}
+    .voice-captured{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+    .capture-pill{background:var(--accent2);color:var(--ink);border-radius:12px;padding:10px 12px;font-size:14px}
+    .timer-display{text-align:center;font-size:64px;font-weight:800;letter-spacing:-.05em;margin:18px 0 14px}
+    .timer-sub{text-align:center;color:var(--muted);font-size:14px}
+    .timer-inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+    .timer-inputs label{font-size:13px;color:var(--muted)}.timer-inputs input{width:100%;margin-top:6px;border:1px solid var(--line);border-radius:14px;padding:13px;font-size:18px;text-align:center}
+    .circle-wrap{display:flex;justify-content:center;margin:6px 0 14px}
+    .ring{width:220px;height:220px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--accent) var(--progress,100%), #e9e4da 0)}
+    .ring-inner{width:184px;height:184px;border-radius:50%;background:var(--card);display:grid;place-items:center}
+    .ring-time{font-size:42px;font-weight:800;letter-spacing:-.04em}
+    .stopwatch{font-size:58px;font-weight:800;text-align:center;letter-spacing:-.04em;margin:24px 0}
+    .laps{display:flex;flex-direction:column;gap:7px;margin-top:12px}.lap{display:flex;justify-content:space-between;padding:10px 12px;background:#f8f6f1;border-radius:12px}
+    @media(max-width:420px){.timer-display{font-size:52px}.ring{width:190px;height:190px}.ring-inner{width:158px;height:158px}.stopwatch{font-size:48px}}
+  </style>
+</head>
+<body>
+<main class="wrap">
+<header>
+  <div><div class="date" id="date"></div><h1>Panel diario</h1></div>
+  <div class="muted" id="topStatus"></div>
+</header>
+
+<nav class="tabs" aria-label="Herramientas">
+  <button class="tab active" data-tab="tasksPanel">✓ Tareas</button>
+  <button class="tab" data-tab="timerPanel">◷ Cuenta atrás</button>
+  <button class="tab" data-tab="chronoPanel">⏱ Cronómetro</button>
+</nav>
+
+<section class="panel active" id="tasksPanel">
+  <section class="card">
+    <button class="primary" id="micBtn">🎙️ Empezar dictado</button>
+    <div class="status" id="voiceStatus" aria-live="polite"></div>
+    <div class="voice-preview" id="voicePreview">Aquí aparecerá lo que estás diciendo.</div>
+    <div class="voice-captured" id="voiceCaptured"></div>
+    <div class="hint">Habla una tarea, haz una pausa y continúa con la siguiente. También entiende frases como “otra tarea”, “después” o “también”.</div>
+    <div class="warn" id="voiceWarn"></div>
+  </section>
+
+  <section class="card">
+    <div class="manual"><input id="manualTask" placeholder="Escribe una tarea…"><button id="addTask" aria-label="Añadir">＋</button></div>
+  </section>
+
+  <div class="section-head"><h2>Hoy</h2><span class="muted" id="taskCount"></span></div>
+  <section id="tasks"></section>
+  <div class="actions" style="margin-top:14px">
+    <button class="small" id="uncheckAll">Desmarcar todas</button>
+    <button class="small danger" id="clearDone">Borrar hechas</button>
+  </div>
+</section>
+
+<section class="panel" id="timerPanel">
+  <section class="card">
+    <div class="timer-inputs">
+      <label>Minutos<input type="number" id="timerMinutes" value="10" min="0" max="999"></label>
+      <label>Segundos<input type="number" id="timerSeconds" value="0" min="0" max="59"></label>
+    </div>
+    <div class="circle-wrap">
+      <div class="ring" id="timerRing">
+        <div class="ring-inner"><div class="ring-time" id="timerDisplay">10:00</div></div>
+      </div>
+    </div>
+    <div class="timer-sub" id="timerStatus">Preparado</div>
+    <div class="actions" style="margin-top:14px">
+      <button class="small" id="timerStart">Iniciar</button>
+      <button class="small" id="timerPause">Pausa</button>
+      <button class="small danger" id="timerReset">Reiniciar</button>
+    </div>
+  </section>
+</section>
+
+<section class="panel" id="chronoPanel">
+  <section class="card">
+    <div class="stopwatch" id="chronoDisplay">00:00.0</div>
+    <div class="actions">
+      <button class="small" id="chronoStart">Iniciar</button>
+      <button class="small" id="chronoLap">Vuelta</button>
+      <button class="small danger" id="chronoReset">Reiniciar</button>
+    </div>
+    <div class="laps" id="laps"></div>
+  </section>
+</section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+$('date').textContent=new Intl.DateTimeFormat('es-ES',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
+
+// Tabs
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active'); $(btn.dataset.tab).classList.add('active');
+  });
+});
+
+// TASKS
+const TASK_KEY='panel_diario_tasks_v2';
+let tasks=JSON.parse(localStorage.getItem(TASK_KEY)||'[]');
+function saveTasks(){localStorage.setItem(TASK_KEY,JSON.stringify(tasks))}
+function addTaskText(s){
+  s=(s||'').trim().replace(/^[\s,.;:-]+|[\s,.;:-]+$/g,'');
+  if(!s)return;
+  tasks.push({id:Date.now()+Math.random(),text:s[0].toUpperCase()+s.slice(1),done:false});
+}
+function renderTasks(){
+  const el=$('tasks'); el.innerHTML='';
+  [...tasks].sort((a,b)=>Number(a.done)-Number(b.done)).forEach(t=>{
+    const row=document.createElement('div'); row.className='task'+(t.done?' done':'');
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=t.done;
+    cb.addEventListener('change',()=>{t.done=cb.checked;saveTasks();renderTasks()});
+    const tx=document.createElement('div'); tx.className='txt'; tx.textContent=t.text;
+    const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.setAttribute('aria-label','Borrar');
+    del.addEventListener('click',()=>{tasks=tasks.filter(x=>x.id!==t.id);saveTasks();renderTasks()});
+    row.append(cb,tx,del); el.append(row);
+  });
+  if(!tasks.length) el.innerHTML='<div class="empty">No tienes tareas todavía.<br>Dicta una o escríbela.</div>';
+  const done=tasks.filter(t=>t.done).length;
+  $('taskCount').textContent=`${tasks.length} tarea${tasks.length===1?'':'s'}`;
+  $('topStatus').textContent=tasks.length?`${done}/${tasks.length} hechas`:'';
+}
+function manualAdd(){const v=$('manualTask').value;if(!v.trim())return;addTaskText(v);$('manualTask').value='';saveTasks();renderTasks()}
+$('addTask').addEventListener('click',manualAdd);
+$('manualTask').addEventListener('keydown',e=>{if(e.key==='Enter')manualAdd()});
+$('clearDone').addEventListener('click',()=>{tasks=tasks.filter(t=>!t.done);saveTasks();renderTasks()});
+$('uncheckAll').addEventListener('click',()=>{tasks.forEach(t=>t.done=false);saveTasks();renderTasks()});
+renderTasks();
+
+// VOICE SESSION
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let recognition=null, voiceRunning=false, interimBuffer='', lastFinalAt=0, pauseTimer=null, captured=[];
+const micBtn=$('micBtn'), voiceStatus=$('voiceStatus'), voicePreview=$('voicePreview'), voiceCaptured=$('voiceCaptured'), voiceWarn=$('voiceWarn');
+
+function splitSmart(text){
+  return text
+    .replace(/^(hoy\s+)?(tengo que|quiero|debo|necesito)\s+/i,'')
+    .split(/\s*(?:,|;|\.|\botra tarea\b|\bdespués\b|\bluego\b|\btambién\b|\bademás\b)\s*/i)
+    .map(s=>s.trim()).filter(s=>s.length>1);
+}
+function showCaptured(){
+  voiceCaptured.innerHTML='';
+  captured.slice(-5).forEach(t=>{
+    const d=document.createElement('div'); d.className='capture-pill'; d.textContent='✓ '+t; voiceCaptured.append(d);
+  });
+}
+function commitSpeech(text){
+  const parts=splitSmart(text);
+  parts.forEach(p=>{addTaskText(p);captured.push(p)});
+  if(parts.length){saveTasks();renderTasks();showCaptured()}
+}
+function schedulePauseCommit(text){
+  clearTimeout(pauseTimer);
+  pauseTimer=setTimeout(()=>{
+    const t=(text||'').trim();
+    if(t){commitSpeech(t);voicePreview.textContent='Pausa detectada. Puedes seguir hablando.'}
+  },1200);
+}
+if(!window.isSecureContext){
+  voiceWarn.style.display='block';voiceWarn.textContent='El dictado necesita abrirse desde la web HTTPS publicada, no como archivo local.';
+  micBtn.disabled=true;micBtn.style.opacity='.55';
+}else if(!SR){
+  voiceWarn.style.display='block';voiceWarn.textContent='Este navegador no ofrece reconocimiento de voz. Prueba con Chrome en Android.';
+  micBtn.disabled=true;micBtn.style.opacity='.55';
+}else{
+  recognition=new SR(); recognition.lang='es-ES'; recognition.continuous=true; recognition.interimResults=true;
+  micBtn.addEventListener('click',()=>{
+    if(!voiceRunning){captured=[];showCaptured();try{recognition.start()}catch(e){}}
+    else{recognition.stop()}
+  });
+  recognition.onstart=()=>{
+    voiceRunning=true;micBtn.classList.add('listening');micBtn.textContent='■ Terminar dictado';
+    voiceStatus.textContent='Escuchando. Haz una pausa entre tareas.';
+    voicePreview.textContent='Habla con normalidad…';
+  };
+  recognition.onresult=e=>{
+    let interim='', finals='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const txt=e.results[i][0].transcript;
+      if(e.results[i].isFinal) finals+=txt+' '; else interim+=txt;
+    }
+    if(interim){voicePreview.textContent=interim;schedulePauseCommit(interim)}
+    if(finals.trim()){
+      clearTimeout(pauseTimer);commitSpeech(finals.trim());voicePreview.textContent='Guardado. Puedes continuar.';
+    }
+  };
+  recognition.onerror=e=>{
+    if(e.error==='not-allowed') voiceStatus.textContent='Permite el micrófono en Chrome.';
+    else if(e.error!=='no-speech') voiceStatus.textContent='No he podido escuchar bien. Prueba otra vez.';
+  };
+  recognition.onend=()=>{
+    voiceRunning=false;micBtn.classList.remove('listening');micBtn.textContent='🎙️ Empezar dictado';
+    voiceStatus.textContent=captured.length?`${captured.length} tarea${captured.length===1?'':'s'} capturada${captured.length===1?'':'s'}.`:'Dictado detenido.';
+  };
+}
+
+// COUNTDOWN
+let timerInterval=null, timerTotal=600, timerRemaining=600, timerRunning=false, timerEnd=0;
+function formatTimer(sec){
+  sec=Math.max(0,Math.ceil(sec)); const m=Math.floor(sec/60), s=sec%60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function updateTimerUI(){
+  $('timerDisplay').textContent=formatTimer(timerRemaining);
+  const pct=timerTotal>0?Math.max(0,Math.min(100,(timerRemaining/timerTotal)*100)):0;
+  $('timerRing').style.setProperty('--progress',pct+'%');
+}
+function readTimerInputs(){
+  const m=Math.max(0,parseInt($('timerMinutes').value)||0), s=Math.max(0,Math.min(59,parseInt($('timerSeconds').value)||0));
+  return m*60+s;
+}
+function stopTimerInterval(){if(timerInterval){clearInterval(timerInterval);timerInterval=null}}
+function tickTimer(){
+  timerRemaining=Math.max(0,(timerEnd-Date.now())/1000); updateTimerUI();
+  if(timerRemaining<=0){stopTimerInterval();timerRunning=false;$('timerStatus').textContent='Tiempo terminado';navigator.vibrate?.([200,100,200]);}
+}
+$('timerStart').addEventListener('click',()=>{
+  if(timerRunning)return;
+  if(timerRemaining<=0 || timerRemaining===timerTotal){
+    timerTotal=readTimerInputs();timerRemaining=timerTotal;
+  }
+  if(timerRemaining<=0){$('timerStatus').textContent='Introduce un tiempo mayor que cero';return}
+  timerEnd=Date.now()+timerRemaining*1000;timerRunning=true;$('timerStatus').textContent='En marcha';
+  stopTimerInterval();timerInterval=setInterval(tickTimer,200);tickTimer();
+});
+$('timerPause').addEventListener('click',()=>{
+  if(!timerRunning)return;tickTimer();stopTimerInterval();timerRunning=false;$('timerStatus').textContent='En pausa';
+});
+$('timerReset').addEventListener('click',()=>{
+  stopTimerInterval();timerRunning=false;timerTotal=readTimerInputs();timerRemaining=timerTotal;$('timerStatus').textContent='Preparado';updateTimerUI();
+});
+['timerMinutes','timerSeconds'].forEach(id=>$(id).addEventListener('change',()=>{if(!timerRunning){timerTotal=readTimerInputs();timerRemaining=timerTotal;updateTimerUI()}}));
+updateTimerUI();
+
+// STOPWATCH
+let chronoRunning=false, chronoStart=0, chronoElapsed=0, chronoInterval=null, lapCount=0;
+function formatChrono(ms){
+  const total=Math.max(0,ms); const min=Math.floor(total/60000), sec=Math.floor((total%60000)/1000), tenth=Math.floor((total%1000)/100);
+  return `${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}.${tenth}`;
+}
+function chronoNow(){return chronoElapsed+(chronoRunning?(Date.now()-chronoStart):0)}
+function updateChrono(){$('chronoDisplay').textContent=formatChrono(chronoNow())}
+$('chronoStart').addEventListener('click',()=>{
+  if(!chronoRunning){chronoRunning=true;chronoStart=Date.now();$('chronoStart').textContent='Pausa';chronoInterval=setInterval(updateChrono,100)}
+  else{chronoElapsed=chronoNow();chronoRunning=false;clearInterval(chronoInterval);chronoInterval=null;$('chronoStart').textContent='Continuar';updateChrono()}
+});
+$('chronoLap').addEventListener('click',()=>{
+  if(chronoNow()<=0)return;lapCount++;
+  const row=document.createElement('div');row.className='lap';
+  row.innerHTML=`<span>Vuelta ${lapCount}</span><strong>${formatChrono(chronoNow())}</strong>`;
+  $('laps').prepend(row);
+});
+$('chronoReset').addEventListener('click',()=>{
+  chronoRunning=false;chronoElapsed=0;chronoStart=0;lapCount=0;if(chronoInterval)clearInterval(chronoInterval);chronoInterval=null;
+  $('chronoStart').textContent='Iniciar';$('laps').innerHTML='';updateChrono();
+});
+updateChrono();
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body>
+</html>

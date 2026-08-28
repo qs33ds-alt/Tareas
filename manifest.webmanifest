@@ -1,9 +1,9 @@
 {
-  "name": "Mis tareas por voz",
-  "short_name": "Mis tareas",
+  "name": "Panel diario",
+  "short_name": "Panel diario",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f5f2eb",
   "theme_color": "#f5f2eb",
-  "description": "Lista sencilla de tareas con dictado por voz."
+  "description": "Tareas por voz, cuenta atrás y cronómetro en una sola app diaria."
 }
