@@ -1,0 +1,9 @@
+{
+  "name": "Mis tareas por voz",
+  "short_name": "Mis tareas",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f2eb",
+  "theme_color": "#f5f2eb",
+  "description": "Lista sencilla de tareas con dictado por voz."
+}
