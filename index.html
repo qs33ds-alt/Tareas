@@ -83,6 +83,19 @@ select{width:100%;border:1px solid var(--line);border-radius:14px;padding:13px;f
 .counter-actions{display:flex;justify-content:center;margin-top:8px}
 .counter-reset{border:0;background:transparent;color:var(--muted);font-size:12px;text-decoration:underline}
 
+
+.counter-chart-wrap{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.counter-chart-title{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.counter-chart-title strong{font-size:13px}.counter-chart-title span{font-size:12px;color:var(--muted)}
+.week-chart{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;align-items:end;height:116px;padding:8px 2px 0}
+.day-col{height:100%;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px}
+.day-value{font-size:11px;font-weight:750;color:var(--muted);min-height:14px}
+.bar-area{height:70px;width:100%;display:flex;align-items:flex-end;justify-content:center}
+.day-bar{width:min(24px,70%);min-height:3px;border-radius:7px 7px 3px 3px;background:var(--accent);opacity:.78}
+.day-label{font-size:10px;color:var(--muted);white-space:nowrap}
+.day-col.today .day-label{color:var(--accent);font-weight:800}
+.counter-history-empty{font-size:12px;color:var(--muted);padding:12px 0 2px;text-align:center}
+
 @media(max-width:420px){.focus-controls{grid-template-columns:repeat(2,1fr)}.ring{width:190px;height:190px}.ring-inner{width:158px;height:158px}.stopwatch{font-size:48px}}
 </style>
 </head>
@@ -329,12 +342,105 @@ $('brainClear').addEventListener('click',()=>{$('brainText').value='';$('brainSt
 renderBrain();
 
 
-// MULTIPLE MANUAL COUNTERS
-const COUNTER_KEY='panel_counters_v1';
-let counters=JSON.parse(localStorage.getItem(COUNTER_KEY)||'[]');
+// MULTIPLE MANUAL COUNTERS + WEEKLY HISTORY
+const COUNTER_KEY='panel_counters_v2';
+const OLD_COUNTER_KEY='panel_counters_v1';
+
+function localDateKey(d=new Date()){
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function migrateCounters(){
+  let current=JSON.parse(localStorage.getItem(COUNTER_KEY)||'null');
+  if(Array.isArray(current)) return current;
+  const old=JSON.parse(localStorage.getItem(OLD_COUNTER_KEY)||'[]');
+  const today=localDateKey();
+  current=old.map(c=>({
+    ...c,
+    history:{...(c.history||{}),[today]:Number(c.value)||0}
+  }));
+  localStorage.setItem(COUNTER_KEY,JSON.stringify(current));
+  return current;
+}
+let counters=migrateCounters();
 
 function saveCounters(){
   localStorage.setItem(COUNTER_KEY,JSON.stringify(counters));
+}
+function ensureToday(c){
+  if(!c.history || typeof c.history!=='object') c.history={};
+  const today=localDateKey();
+  if(!(today in c.history)) c.history[today]=Number(c.value)||0;
+}
+function recordCounter(c){
+  ensureToday(c);
+  c.history[localDateKey()]=Number(c.value)||0;
+  saveCounters();
+}
+function lastSevenDays(){
+  const arr=[];
+  const formatter=new Intl.DateTimeFormat('es-ES',{weekday:'short'});
+  for(let i=6;i>=0;i--){
+    const d=new Date();
+    d.setHours(12,0,0,0);
+    d.setDate(d.getDate()-i);
+    arr.push({
+      key:localDateKey(d),
+      label:formatter.format(d).replace('.','').slice(0,3),
+      today:i===0
+    });
+  }
+  return arr;
+}
+function buildWeekChart(c){
+  ensureToday(c);
+  const days=lastSevenDays();
+  const vals=days.map(d=>Number(c.history[d.key] ?? 0));
+  const max=Math.max(1,...vals.map(v=>Math.abs(v)));
+
+  const wrap=document.createElement('div');
+  wrap.className='counter-chart-wrap';
+
+  const title=document.createElement('div');
+  title.className='counter-chart-title';
+  const strong=document.createElement('strong');
+  strong.textContent='📉 Últimos 7 días';
+  const meta=document.createElement('span');
+  meta.textContent='valor diario';
+  title.append(strong,meta);
+
+  const chart=document.createElement('div');
+  chart.className='week-chart';
+  chart.setAttribute('aria-label',`Evolución semanal de ${c.name}`);
+
+  days.forEach((d,idx)=>{
+    const col=document.createElement('div');
+    col.className='day-col'+(d.today?' today':'');
+    const value=document.createElement('div');
+    value.className='day-value';
+    value.textContent=String(vals[idx]);
+
+    const area=document.createElement('div');
+    area.className='bar-area';
+    const bar=document.createElement('div');
+    bar.className='day-bar';
+    const h=Math.max(4,Math.round((Math.abs(vals[idx])/max)*70));
+    bar.style.height=h+'px';
+    bar.title=`${d.label}: ${vals[idx]}`;
+    area.append(bar);
+
+    const label=document.createElement('div');
+    label.className='day-label';
+    label.textContent=d.label;
+
+    col.append(value,area,label);
+    chart.append(col);
+  });
+
+  wrap.append(title,chart);
+  return wrap;
 }
 function renderCounters(){
   const el=$('counterList');
@@ -343,7 +449,10 @@ function renderCounters(){
     el.innerHTML='<div class="muted" style="padding:8px 2px">Todavía no tienes contadores.</div>';
     return;
   }
+
   counters.forEach(c=>{
+    ensureToday(c);
+
     const item=document.createElement('div');
     item.className='counter-item';
 
@@ -363,7 +472,6 @@ function renderCounters(){
       saveCounters();
       renderCounters();
     });
-
     top.append(label,del);
 
     const row=document.createElement('div');
@@ -374,7 +482,7 @@ function renderCounters(){
     minus.textContent='−';
     minus.addEventListener('click',()=>{
       c.value=(Number(c.value)||0)-1;
-      saveCounters();
+      recordCounter(c);
       renderCounters();
     });
 
@@ -387,7 +495,7 @@ function renderCounters(){
     plus.textContent='+';
     plus.addEventListener('click',()=>{
       c.value=(Number(c.value)||0)+1;
-      saveCounters();
+      recordCounter(c);
       renderCounters();
     });
 
@@ -400,20 +508,28 @@ function renderCounters(){
     reset.textContent='Reiniciar a 0';
     reset.addEventListener('click',()=>{
       c.value=0;
-      saveCounters();
+      recordCounter(c);
       renderCounters();
     });
     actions.append(reset);
 
-    item.append(top,row,actions);
+    const graph=buildWeekChart(c);
+    item.append(top,row,actions,graph);
     el.append(item);
   });
+  saveCounters();
 }
 function addCounter(){
   const input=$('counterNewName');
   const name=input.value.trim();
   if(!name)return;
-  counters.push({id:String(Date.now()+Math.random()),name,value:0});
+  const today=localDateKey();
+  counters.push({
+    id:String(Date.now()+Math.random()),
+    name,
+    value:0,
+    history:{[today]:0}
+  });
   input.value='';
   saveCounters();
   renderCounters();
